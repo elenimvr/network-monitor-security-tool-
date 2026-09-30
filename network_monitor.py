@@ -3,6 +3,7 @@ import platform
 import socket
 import subprocess
 import time
+import shutil
 from datetime import datetime
 
 from database import create_database, save_scan, get_scan_history
