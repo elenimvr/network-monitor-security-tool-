@@ -1,9 +1,9 @@
 import ipaddress
 import platform
+import shutil
 import socket
 import subprocess
 import time
-import shutil
 from datetime import datetime
 
 from database import create_database, save_scan, get_scan_history
@@ -46,42 +46,90 @@ def validate_ip(ip):
 
 
 def ping_device(ip):
-    system = platform.system().lower()
+    ping_command = shutil.which("ping")
 
-    if system == "windows":
-        command = ["ping", "-n", "1", "-w", "1000", ip]
-    else:
-        command = ["ping", "-c", "1", "-W", "1", ip]
+    if ping_command:
+        system = platform.system().lower()
 
-    start_time = time.time()
+        if system == "windows":
+            command = [ping_command, "-n", "1", "-w", "1000", ip]
+        else:
+            command = [ping_command, "-c", "1", "-W", "1", ip]
 
-    try:
-        result = subprocess.run(
-            command,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=5
-        )
-    except subprocess.TimeoutExpired:
-        return False, None
+        start_time = time.time()
 
-    elapsed_time = time.time() - start_time
-    latency = round(elapsed_time * 1000, 2)
+        try:
+            result = subprocess.run(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5
+            )
 
-    return result.returncode == 0, latency
+            latency = round(
+                (time.time() - start_time) * 1000,
+                2
+            )
+
+            if result.returncode == 0:
+                return True, latency
+
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+
+    # Fallback for environments such as GitHub Codespaces
+    # where the ping command may not be installed.
+    for port in (53, 80, 443):
+        start_time = time.time()
+
+        try:
+            with socket.socket(
+                socket.AF_INET,
+                socket.SOCK_STREAM
+            ) as sock:
+
+                sock.settimeout(1)
+
+                result = sock.connect_ex(
+                    (ip, port)
+                )
+
+            latency = round(
+                (time.time() - start_time) * 1000,
+                2
+            )
+
+            if result == 0:
+                return True, latency
+
+        except OSError:
+            continue
+
+    return False, None
 
 
 def scan_port(ip, port):
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        with socket.socket(
+            socket.AF_INET,
+            socket.SOCK_STREAM
+        ) as sock:
+
             sock.settimeout(0.5)
-            return sock.connect_ex((ip, port)) == 0
-    except socket.error:
+
+            return sock.connect_ex(
+                (ip, port)
+            ) == 0
+
+    except OSError:
         return False
 
 
 def detect_service(port):
-    return COMMON_SERVICES.get(port, "Unknown Service")
+    return COMMON_SERVICES.get(
+        port,
+        "Unknown Service"
+    )
 
 
 def monitor_device(ip):
@@ -89,7 +137,9 @@ def monitor_device(ip):
     print("NETWORK MONITOR & SECURITY TOOL")
     print("=" * 50)
 
-    log_message(f"Started scan for {ip}")
+    log_message(
+        f"Started scan for {ip}"
+    )
 
     online, latency = ping_device(ip)
 
@@ -105,31 +155,49 @@ def monitor_device(ip):
             open_ports=[]
         )
 
-        log_message(f"{ip} is OFFLINE")
+        log_message(
+            f"{ip} is OFFLINE"
+        )
+
         return
 
     print("Status: ONLINE")
     print(f"Latency: {latency} ms")
 
-    log_message(f"{ip} is ONLINE - Latency: {latency} ms")
+    log_message(
+        f"{ip} is ONLINE - Latency: {latency} ms"
+    )
 
-    print("\nScanning common ports...\n")
+    print(
+        "\nScanning common ports...\n"
+    )
 
     open_ports = []
 
     for port in PORTS_TO_SCAN:
         if scan_port(ip, port):
+
             service = detect_service(port)
+
             open_ports.append(port)
 
-            print(f"[OPEN] Port {port} - {service}")
+            print(
+                f"[OPEN] Port {port} - {service}"
+            )
 
             log_message(
-                f"{ip} - Open port: {port} ({service})"
+                f"{ip} - Open port: "
+                f"{port} ({service})"
             )
 
     if not open_ports:
-        print("No common open ports detected.")
+        print(
+            "No common open ports detected."
+        )
+
+        log_message(
+            f"{ip} - No common open ports detected"
+        )
 
     save_scan(
         ip_address=ip,
@@ -138,7 +206,9 @@ def monitor_device(ip):
         open_ports=open_ports
     )
 
-    log_message(f"Finished scan for {ip}")
+    log_message(
+        f"Finished scan for {ip}"
+    )
 
     print("\nScan complete.")
 
@@ -147,7 +217,9 @@ def show_history():
     history = get_scan_history()
 
     if not history:
-        print("\nNo scan history found.")
+        print(
+            "\nNo scan history found."
+        )
         return
 
     print("\n" + "=" * 70)
@@ -155,21 +227,45 @@ def show_history():
     print("=" * 70)
 
     for scan in history:
-        ip_address, status, latency, open_ports, scan_time = scan
 
-        latency_text = (
-            f"{latency} ms"
-            if latency is not None
-            else "N/A"
+        (
+            ip_address,
+            status,
+            latency,
+            open_ports,
+            scan_time
+        ) = scan
+
+        if latency is not None:
+            latency_text = f"{latency} ms"
+        else:
+            latency_text = "N/A"
+
+        if open_ports:
+            ports_text = open_ports
+        else:
+            ports_text = "None"
+
+        print(
+            f"\nDate:       {scan_time}"
         )
 
-        ports_text = open_ports if open_ports else "None"
+        print(
+            f"IP:         {ip_address}"
+        )
 
-        print(f"\nDate:       {scan_time}")
-        print(f"IP:         {ip_address}")
-        print(f"Status:     {status}")
-        print(f"Latency:    {latency_text}")
-        print(f"Open Ports: {ports_text}")
+        print(
+            f"Status:     {status}"
+        )
+
+        print(
+            f"Latency:    {latency_text}"
+        )
+
+        print(
+            f"Open Ports: {ports_text}"
+        )
+
         print("-" * 70)
 
 
@@ -177,39 +273,58 @@ def main():
     create_database()
 
     while True:
+
         print("\n" + "=" * 50)
-        print("NETWORK MONITOR & SECURITY TOOL")
+        print(
+            "NETWORK MONITOR & SECURITY TOOL"
+        )
         print("=" * 50)
+
         print("1. New network scan")
         print("2. View scan history")
         print("3. Exit")
 
-        choice = input("\nChoose an option: ").strip()
+        choice = input(
+            "\nChoose an option: "
+        ).strip()
 
         if choice == "1":
+
             target_ip = input(
                 "Enter an IP address: "
             ).strip()
 
             if not validate_ip(target_ip):
-                print("Invalid IP address.")
+                print(
+                    "Invalid IP address."
+                )
                 continue
 
             monitor_device(target_ip)
 
         elif choice == "2":
+
             show_history()
 
         elif choice == "3":
+
             print("\nGoodbye!")
             break
 
         else:
-            print("Invalid option. Choose 1, 2 or 3.")
+
+            print(
+                "Invalid option. "
+                "Choose 1, 2 or 3."
+            )
 
 
 if __name__ == "__main__":
+
     try:
         main()
+
     except KeyboardInterrupt:
-        print("\nProgram stopped by user.")
+        print(
+            "\nProgram stopped by user."
+        )
