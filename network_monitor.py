@@ -3,7 +3,7 @@ import socket
 import subprocess
 import time
 from datetime import datetime
-
+from database import create_database, save_scan
 
 COMMON_SERVICES = {
     21: "FTP",
@@ -75,6 +75,8 @@ def monitor_device(ip):
     print("NETWORK MONITOR & SECURITY TOOL")
     print("=" * 45)
 
+    create_database()
+
     log_message(f"Started scan for {ip}")
 
     online, latency = ping_device(ip)
@@ -83,7 +85,16 @@ def monitor_device(ip):
 
     if not online:
         print("Status: OFFLINE")
+
         log_message(f"{ip} is OFFLINE")
+
+        save_scan(
+            ip_address=ip,
+            status="OFFLINE",
+            latency=None,
+            open_ports=[]
+        )
+
         return
 
     print("Status: ONLINE")
@@ -99,6 +110,33 @@ def monitor_device(ip):
 
     print("\nScanning ports...\n")
 
+    open_ports = []
+
+    for port in ports:
+        if scan_port(ip, port):
+            service = detect_service(port)
+            open_ports.append(port)
+
+            print(f"[OPEN] Port {port} - {service}")
+
+            log_message(
+                f"{ip} - Open port detected: {port} ({service})"
+            )
+
+    if not open_ports:
+        print("No common open ports detected.")
+        log_message(f"{ip} - No common open ports detected")
+
+    save_scan(
+        ip_address=ip,
+        status="ONLINE",
+        latency=latency,
+        open_ports=open_ports
+    )
+
+    print("\nScan complete.")
+
+    log_message(f"Finished scan for {ip}")
     open_ports = []
 
     for port in ports:
