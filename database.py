@@ -44,7 +44,22 @@ def save_scan(ip_address, status, latency, open_ports):
         ",".join(map(str, open_ports)),
         datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ))
+def get_scan_history(limit=10):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
 
+    cursor.execute("""
+        SELECT ip_address, status, latency, open_ports, scan_time
+        FROM scans
+        ORDER BY id DESC
+        LIMIT ?
+    """, (limit,))
+
+    rows = cursor.fetchall()
+
+    conn.close()
+
+    return rows
     conn.commit()
     conn.close()
 
