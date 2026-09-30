@@ -3,7 +3,7 @@ import socket
 import subprocess
 import time
 from datetime import datetime
-from database import create_database, save_scan
+from database import create_database, save_scan, get_scan_history
 
 COMMON_SERVICES = {
     21: "FTP",
@@ -159,6 +159,61 @@ def monitor_device(ip):
     log_message(f"Finished scan for {ip}")
 
 
-target_ip = input("Enter IP address to monitor: ")
+def show_history():
+    create_database()
+    history = get_scan_history()
 
-monitor_device(target_ip)
+    if not history:
+        print("\nNo scan history found.")
+        return
+
+    print("\n" + "=" * 70)
+    print("SCAN HISTORY")
+    print("=" * 70)
+
+    for scan in history:
+        ip_address, status, latency, open_ports, scan_time = scan
+
+        latency_text = f"{latency} ms" if latency is not None else "N/A"
+        ports_text = open_ports if open_ports else "None"
+
+        print(f"\nTime: {scan_time}")
+        print(f"IP: {ip_address}")
+        print(f"Status: {status}")
+        print(f"Latency: {latency_text}")
+        print(f"Open Ports: {ports_text}")
+        print("-" * 70)
+
+
+def main():
+    while True:
+        print("\n" + "=" * 45)
+        print("NETWORK MONITOR & SECURITY TOOL")
+        print("=" * 45)
+        print("1. New Scan")
+        print("2. View Scan History")
+        print("3. Exit")
+
+        choice = input("\nChoose an option: ").strip()
+
+        if choice == "1":
+            target_ip = input("Enter IP address to monitor: ").strip()
+
+            if target_ip:
+                monitor_device(target_ip)
+            else:
+                print("Please enter a valid IP address.")
+
+        elif choice == "2":
+            show_history()
+
+        elif choice == "3":
+            print("Goodbye!")
+            break
+
+        else:
+            print("Invalid option. Please choose 1, 2 or 3.")
+
+
+if __name__ == "__main__":
+    main()
