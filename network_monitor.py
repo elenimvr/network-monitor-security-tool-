@@ -2,6 +2,7 @@ import platform
 import socket
 import subprocess
 import time
+from datetime import datetime
 
 
 COMMON_SERVICES = {
@@ -20,6 +21,13 @@ COMMON_SERVICES = {
     5432: "PostgreSQL",
     8080: "HTTP Alternate"
 }
+
+
+def log_message(message):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    with open("network_log.txt", "a", encoding="utf-8") as log_file:
+        log_file.write(f"[{timestamp}] {message}\n")
 
 
 def ping_device(ip):
@@ -63,9 +71,11 @@ def detect_service(port):
 
 
 def monitor_device(ip):
-    print("=" * 40)
-    print("NETWORK MONITOR")
-    print("=" * 40)
+    print("=" * 45)
+    print("NETWORK MONITOR & SECURITY TOOL")
+    print("=" * 45)
+
+    log_message(f"Started scan for {ip}")
 
     online, latency = ping_device(ip)
 
@@ -73,12 +83,19 @@ def monitor_device(ip):
 
     if not online:
         print("Status: OFFLINE")
+        log_message(f"{ip} is OFFLINE")
         return
 
     print("Status: ONLINE")
     print(f"Latency: {latency} ms")
 
-    ports = [21, 22, 23, 25, 53, 80, 110, 139, 443, 445, 3306, 3389, 5432, 8080]
+    log_message(f"{ip} is ONLINE - Latency: {latency} ms")
+
+    ports = [
+        21, 22, 23, 25, 53, 80, 110,
+        139, 443, 445, 3306, 3389,
+        5432, 8080
+    ]
 
     print("\nScanning ports...\n")
 
@@ -88,12 +105,20 @@ def monitor_device(ip):
         if scan_port(ip, port):
             service = detect_service(port)
             open_ports.append(port)
+
             print(f"[OPEN] Port {port} - {service}")
+
+            log_message(
+                f"{ip} - Open port detected: {port} ({service})"
+            )
 
     if not open_ports:
         print("No common open ports detected.")
+        log_message(f"{ip} - No common open ports detected")
 
     print("\nScan complete.")
+
+    log_message(f"Finished scan for {ip}")
 
 
 target_ip = input("Enter IP address to monitor: ")
